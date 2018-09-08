@@ -31,7 +31,7 @@ def user_details_screen(target_arn, resource_type, roles_list, user_list, user_n
     print("\n[1] Go back.")
     print("[2] Exit.\n\n")
 
-    action = raw_input(">>> ")
+    action = input(">>> ")
     if action == '1':
         users_screen(target_arn, resource_type, roles_list, user_list)
     if action == '2':
@@ -50,7 +50,7 @@ def users_screen(target_arn, resource_type, roles_list, user_list):
     print("\n[{}] Go back.".format(i))
     print("[{}] Exit.\n\n".format(i+1))
 
-    action = raw_input(">>> ")
+    action = input(">>> ")
     try:
         number = int(action)
     except:
@@ -72,7 +72,7 @@ def services_screen(target_arn, resource_type, roles_list, user_list):
     print("\n[1] Go back.")
     print("[2] Exit.\n\n")
 
-    action = raw_input(">>> ")
+    action = input(">>> ")
     if action == '1':
         access_screen(target_arn, resource_type, roles_list, user_list)
     if action == '2':
@@ -88,7 +88,7 @@ def access_screen(target_arn, resource_type, roles_list, user_list):
     print("[1] List of services with access.")
     print("[2] List of users with access.")
     print("[3] Exit.\n\n")
-    action = raw_input(">>> ")
+    action = input(">>> ")
     if action == '1':
         services_screen(target_arn, resource_type, roles_list, user_list)
     if action == '2':
