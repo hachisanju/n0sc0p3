@@ -214,18 +214,21 @@ def main():
             sys.stdout.flush()
             policy_details = (iam.get_user_policy(UserName=un, PolicyName=user_policy))['PolicyDocument']['Statement']
             for policy in policy_details:
-                new_action = policy['Action']
-                resource = policy['Resource']
-                effect = policy['Effect']
-                temporary_results = process_policy(resource, target_arn, user_does_have_access)
-                if temporary_results == True and effect == "Allow":
-                    user_does_have_access = True
-                    determine_actions(new_action, current_user, resource_type)
-                    if "Get" in new_action:
-                        current_user.read_access = True
-                    if "Put" in new_action:
-                        current_user.write_access = True
-                    access_via_attached_policy = True
+                try:
+                    new_action = policy['Action']
+                    resource = policy['Resource']
+                    effect = policy['Effect']
+                    temporary_results = process_policy(resource, target_arn, user_does_have_access)
+                    if temporary_results == True and effect == "Allow":
+                        user_does_have_access = True
+                        determine_actions(new_action, current_user, resource_type)
+                        if "Get" in new_action:
+                            current_user.read_access = True
+                        if "Put" in new_action:
+                            current_user.write_access = True
+                        access_via_attached_policy = True
+                except Exception as e:
+                    print (e)
 
         for user_policy in (iam.list_attached_user_policies(UserName=un))['AttachedPolicies']:
 
