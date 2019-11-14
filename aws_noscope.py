@@ -13,6 +13,9 @@ class User_With_Access():
     groups = []
     def __init__(self, un):
         username = un
+def exit():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    sys.exit(0)
 
 def user_details_screen(target_arn, resource_type, roles_list, user_list, user_number):
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -35,7 +38,7 @@ def user_details_screen(target_arn, resource_type, roles_list, user_list, user_n
     if action == '1':
         users_screen(target_arn, resource_type, roles_list, user_list)
     if action == '2':
-        sys.exit(0)
+        exit()
     else:
         services_screen(target_arn, resource_type, roles_list, user_list)
 
@@ -60,7 +63,7 @@ def users_screen(target_arn, resource_type, roles_list, user_list):
     if int(action) == i:
         access_screen(target_arn, resource_type, roles_list, user_list)
     if int(action) == i+1:
-        sys.exit(0)
+        exit()
     else:
         users_screen(target_arn, resource_type, roles_list, user_list)
 
@@ -76,7 +79,7 @@ def services_screen(target_arn, resource_type, roles_list, user_list):
     if action == '1':
         access_screen(target_arn, resource_type, roles_list, user_list)
     if action == '2':
-        sys.exit(0)
+        exit()
     else:
         services_screen(target_arn, resource_type, roles_list, user_list)
 
@@ -94,7 +97,7 @@ def access_screen(target_arn, resource_type, roles_list, user_list):
     if action == '2':
         users_screen(target_arn, resource_type, roles_list, user_list)
     if action == '3':
-        sys.exit(0)
+        exit()
     else:
         access_screen(target_arn, resource_type, roles_list, user_list)
 def determine_actions(action, current_user, resource_type):
@@ -136,7 +139,6 @@ def main():
     args = parser.parse_args()
     target_arn = args.arn
     resource_type = target_arn.split(':')[2]
-    #print target_arn
 
     #Set up Boto3
     boto3.setup_default_session(profile_name='{}'.format(args.profile))
@@ -144,11 +146,11 @@ def main():
 
     #CREATE AN EMPTY LIST OF USERS WITH ACCESS TO THE RESOURCE
     users_with_access = []
+    roles_with_access = {}
 
     role_list = []
     principals = []
     #Prep the assessment by gathering all roles
-    #print ("LIST ALL ROLES\n\n\n\n")
     sys.stdout.write("Assessing Role Policies")
     sys.stdout.flush()
     for role in iam.list_roles()['Roles']:
@@ -182,30 +184,14 @@ def main():
                     temporary_results = process_policy(p['Resource'], target_arn, role_does_have_access)
                     if temporary_results == True:
                         role_does_have_access = True
-                    #print role_does_have_access
-                    #if type(p['Resource']) == list:
-                        #for r in p['Resource']:
-                            #if r in target_arn:
-                                #print r
-                                #role_does_have_access = True
-                    #else:
-                        #if p['Resource'] in target_arn:
-                            #role_does_have_access = True
                     if role_does_have_access:
-                        pass
-                        #print p['Action']
-                        #print p['Resource']
-                        #print p['Effect']
+                        roles_with_access[role_name] = p['Action']
                 except:
                     pass
-    #print(role_list)
     sys.stdout.write('\n')
-    #for p in principals:
-        #print ("{} has access to read or write the given ARN.".format(p))
     sys.stdout.write('\n')
 
     #Generate the user list
-    #print ("LIST ALL USERS\n\n\n\n")
     user_list = iam.list_users()
     access_via_attached_policy = False
     access_via_group_policy = []
@@ -214,6 +200,7 @@ def main():
     sys.stdout.write("Assessing User & Group Policies")
     sys.stdout.flush()
     for user in user_list['Users']:
+        #print "Checking user {}".format(user)
         un = user['UserName']
         current_user = User_With_Access(un)
         current_user.username = un
@@ -227,58 +214,68 @@ def main():
             sys.stdout.flush()
             policy_details = (iam.get_user_policy(UserName=un, PolicyName=user_policy))['PolicyDocument']['Statement']
             for policy in policy_details:
-                action = policy['Action']
-                #print action
+                new_action = policy['Action']
                 resource = policy['Resource']
                 effect = policy['Effect']
-                #print "Effect"
                 temporary_results = process_policy(resource, target_arn, user_does_have_access)
                 if temporary_results == True and effect == "Allow":
                     user_does_have_access = True
-                    determine_actions(action, current_user, resource_type)
-                    if "Get" in action:
+                    determine_actions(new_action, current_user, resource_type)
+                    if "Get" in new_action:
                         current_user.read_access = True
-                    if "Put" in action:
+                    if "Put" in new_action:
                         current_user.write_access = True
                     access_via_attached_policy = True
-                #if type(resource) == list:
-                    #for r in resource:
-                        #r = r.split('*')[0]
-                        #print r
-                        #if r in target_arn:
-                            #print r
-                            #user_does_have_access = True
-            #    else:
-                    #if resource in target_arn:
-                        #user_does_have_access = True
-        user_groups = iam.list_groups_for_user(UserName='{}'.format(un))
-        #print(un)
-        #print(user_groups)
 
+        for user_policy in (iam.list_attached_user_policies(UserName=un))['AttachedPolicies']:
+
+            user_policy = user_policy['PolicyArn']
+            #Code repeats below (condense this)
+            sys.stdout.write('.')
+            sys.stdout.flush()
+            try:
+                policy_details = (iam.get_policy_version(PolicyArn=user_policy,VersionId='v1'))['PolicyVersion']['Document']['Statement']
+            except Exception as e:
+                print(e)
+                break
+            for policy in policy_details:
+                try:
+                    new_action = policy['Action']
+                except Exception as e:
+                    break
+                resource = policy['Resource']
+                effect = policy['Effect']
+                temporary_results = process_policy(resource, target_arn, user_does_have_access)
+                if temporary_results == True and effect == "Allow":
+                    user_does_have_access = True
+                    determine_actions(new_action, current_user, resource_type)
+                    if "Get" in new_action:
+                        current_user.read_access = True
+                    if "Put" in new_action:
+                        current_user.write_access = True
+                    access_via_attached_policy = True
+        user_groups = iam.list_groups_for_user(UserName='{}'.format(un))
         for group in user_groups['Groups']:
             sys.stdout.write('.')
             sys.stdout.flush()
             g = group['GroupName']
             print(g)
-            #print("\t{}".format(g))
             for group_policy in iam.list_group_policies(GroupName=g)['PolicyNames']:
-                #Code repeated from above (condense this)
-                #print group_policy
                 policy_details = (iam.get_group_policy(GroupName=g, PolicyName=group_policy))['PolicyDocument']['Statement']
-                #print policy_details
                 for policy in policy_details:
-                    action = policy['Action']
-                    #print action
+                    try:
+                        new_action = policy['Action']
+                    except Exception as e:
+                        break
                     resource = policy['Resource']
                     effect = policy['Effect']
-                    #print effect
                     temporary_results = process_policy(resource, target_arn, user_does_have_access)
                     if temporary_results == True and effect == "Allow":
                         user_does_have_access = True
-                        determine_actions(action, current_user, resource_type)
-                        if "Get" in action:
+                        determine_actions(new_action, current_user, resource_type)
+                        if "Get" in new_action:
                             current_user.read_access = True
-                        if "Put" in action:
+                        if "Put" in new_action:
                             current_user.write_access = True
                         if g not in current_user.groups:
                             current_user.groups.append(g)
@@ -296,43 +293,27 @@ def main():
                 except:
                     pass
                 for policy in policy_versions['PolicyVersion']['Document']['Statement']:
-                    action = policy['Action']
+                    try:
+                        new_action = policy['Action']
+                    except Exception as e:
+                        break
                     resource = policy['Resource']
-                    #print "Resource as described here"
-                    #print resource
                     effect = policy['Effect']
                     temporary_results = process_policy(resource, target_arn, user_does_have_access)
                     if temporary_results == True:
                         user_does_have_access = True
-                        determine_actions(action, current_user, resource_type)
-                        if "Get" in action:
+                        determine_actions(new_action, current_user, resource_type)
+                        if "Get" in new_action:
                             current_user.read_access = True
-                        if "Put" in action:
+                        if "Put" in new_action:
                             current_user.write_access = True
                         if g not in current_user.groups:
                             current_user.groups.append(g)
-                    #print policy
 
         if user_does_have_access:
-            #print(current_user.groups)
+
             if len(current_user.actions) > 0:
                 users_with_access.append(current_user)
-            #print ("{} has access via:".format(un))
-            #if access_via_attached_policy:
-                #print("\tAttached user policy")
-            #if len(access_via_group_policy) > 0:
-                #print("\tThe following groups")
-                #for g in access_via_group_policy:
-                    #print ("\t\t{}".format(g))
-
-    #for user in users_with_access:
-        #print ("{} has access to this resource.".format(user.username))
-        #print ("\tThe following groups provide the user with access to this resource:")
-        #for g in user.groups:
-        #    print("\t\t{}".format(g))
-        #print("\tThis user can perform the following actions:")
-        #for a in user.actions:
-        #    print("\t\t{}".format(a))
 
     access_screen(target_arn, resource_type, principals, users_with_access)
 
